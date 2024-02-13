@@ -68,12 +68,9 @@ export async function getConversation(
         ]
     };
 
-    const conversations: IConversationDocument[] =
-        await ConversationModel.aggregate([
-            {
-                $match: queryObject
-            }
-        ]);
+    const conversations = (await ConversationModel.find(queryObject)
+        .lean()
+        .exec()) as IConversationDocument[];
 
     return conversations;
 }
@@ -142,16 +139,24 @@ export async function getMessages(
         ]
     };
 
-    const messages: IMessageDocument[] = await MessageModel.aggregate([
-        {
-            $match: queryObject
-        },
-        {
-            $sort: {
-                createdAt: 1 // asc
-            }
-        }
-    ]);
+    // const messages: IMessageDocument[] = await MessageModel.aggregate([
+    //     {
+    //         $match: queryObject
+    //     },
+    //     {
+    //         $sort: {
+    //             createdAt: 1 // asc
+    //         }
+    //     }
+    // ]);
+
+    const messages: IMessageDocument[] = await MessageModel.find(
+        queryObject,
+        {},
+        { sort: { createdAt: 1 } }
+    )
+        .lean()
+        .exec();
 
     return messages;
 }
@@ -159,18 +164,18 @@ export async function getMessages(
 export async function getUserMessages(
     conversationId: string
 ): Promise<IMessageDocument[]> {
-    const messages: IMessageDocument[] = await MessageModel.aggregate([
-        {
-            $match: {
-                conversationId
-            }
-        },
-        {
-            $sort: {
-                createdAt: 1 // asc
-            }
-        }
-    ]);
+    // const messages: IMessageDocument[] = await MessageModel.aggregate([
+    //     { $match: { conversationId: messageConversationId } },
+    //     { $sort: { createdAt: 1 } }
+    // ]);
+
+    const messages: IMessageDocument[] = await MessageModel.find(
+        { conversationId },
+        {},
+        { sort: { createdAt: 1 } }
+    )
+        .lean()
+        .exec();
 
     return messages;
 }
@@ -189,7 +194,7 @@ export async function updateOffer(
         {
             new: true
         }
-    )) as IMessageDocument;
+    ).exec()) as IMessageDocument;
 
     return result;
 }
@@ -207,7 +212,7 @@ export async function markMessageAsRead(
         {
             new: true
         }
-    )) as IMessageDocument;
+    ).exec()) as IMessageDocument;
 
     socketIOChatObject.emit("message_updated", result);
 
@@ -226,11 +231,13 @@ export async function markMultipleMessagesAsRead(
                 isRead: true
             }
         }
-    );
+    ).exec();
 
     const message = (await MessageModel.findOne({
         _id: messageId
-    })) as IMessageDocument;
+    })
+        .lean()
+        .exec()) as IMessageDocument;
 
     socketIOChatObject.emit("message_updated", message);
 

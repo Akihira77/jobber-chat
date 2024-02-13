@@ -102,7 +102,7 @@ const messageSchema: Schema = new Schema(
         },
         createdAt: {
             type: Date,
-            default: Date.now()
+            default: Date.now
         }
     },
     {
