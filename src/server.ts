@@ -10,7 +10,12 @@ import {
     winstonLogger
 } from "@Akihira77/jobber-shared";
 import { Logger } from "winston";
-import { API_GATEWAY_URL, ELASTIC_SEARCH_URL, JWT_TOKEN } from "@chat/config";
+import {
+    API_GATEWAY_URL,
+    ELASTIC_SEARCH_URL,
+    JWT_TOKEN,
+    PORT
+} from "@chat/config";
 import {
     Application,
     NextFunction,
@@ -27,8 +32,6 @@ import { appRoutes } from "@chat/routes";
 import { createConnection } from "@chat/queues/connection";
 import { Channel } from "amqplib";
 import { Server } from "socket.io";
-
-const PORT = 4005;
 
 const log: Logger = winstonLogger(
     `${ELASTIC_SEARCH_URL}`,
@@ -136,7 +139,7 @@ function startHttpServer(httpServer: http.Server): void {
     try {
         log.info(`Chat server has started with pid ${process.pid}`);
 
-        httpServer.listen(PORT, () => {
+        httpServer.listen(Number(PORT), () => {
             log.info(`Chat server running on port ${PORT}`);
         });
     } catch (error) {
