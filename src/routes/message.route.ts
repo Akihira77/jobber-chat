@@ -13,11 +13,11 @@ export function messageRoutes(): Router {
     router.put("/mark-multiple-as-read", update.markMessagesAsRead);
 
     router.get(
-        "/conversation/:senderUsername/:receieverUsername",
+        "/conversation/:senderUsername/:receiverUsername",
         get.conversation
     );
     router.get("/conversations/:username", get.conversationList);
-    router.get("/:senderUsername/:receieverUsername", get.messages);
+    router.get("/:senderUsername/:receiverUsername", get.messages);
     router.get("/:conversationId", get.userMessages);
 
     return router;

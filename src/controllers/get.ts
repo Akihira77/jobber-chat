@@ -12,11 +12,11 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 
 export async function conversation(req: Request, res: Response): Promise<void> {
-    const { senderUsername, receieverUsername } = req.params;
+    const { senderUsername, receiverUsername } = req.params;
 
     const conversations: IConversationDocument[] = await getConversation(
         senderUsername,
-        receieverUsername
+        receiverUsername
     );
 
     res.status(StatusCodes.OK).json({
@@ -26,11 +26,11 @@ export async function conversation(req: Request, res: Response): Promise<void> {
 }
 
 export async function messages(req: Request, res: Response): Promise<void> {
-    const { senderUsername, receieverUsername } = req.params;
+    const { senderUsername, receiverUsername } = req.params;
 
     const messages: IMessageDocument[] = await getMessages(
         senderUsername,
-        receieverUsername
+        receiverUsername
     );
 
     res.status(StatusCodes.OK).json({

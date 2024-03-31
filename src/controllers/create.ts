@@ -60,9 +60,9 @@ export async function message(req: Request, res: Response): Promise<void> {
 
     if (!req.body.hasConversationId) {
         await createConversation(
-            `${req.body.conversationId}`,
-            `${messageData.senderUsername}`,
-            `${messageData.receiverUsername}`
+            String(req.body.conversationId),
+            messageData.senderUsername!,
+            messageData.receiverUsername!
         );
     }
 
