@@ -10,7 +10,7 @@ import { addMessage, createConversation } from "@chat/services/message.service";
 import { StatusCodes } from "http-status-codes";
 
 export async function message(req: Request, res: Response): Promise<void> {
-    const { error } = await Promise.resolve(messageSchema.validate(req.body));
+    const { error } = messageSchema.validate(req.body);
 
     if (error?.details) {
         throw new BadRequestError(
@@ -31,7 +31,7 @@ export async function message(req: Request, res: Response): Promise<void> {
 
         if (!result?.public_id) {
             throw new BadRequestError(
-                "File uplaod error. Try again",
+                "File upload error. Try again",
                 "Create message() method"
             );
         }
@@ -66,7 +66,7 @@ export async function message(req: Request, res: Response): Promise<void> {
         );
     }
 
-    await addMessage(messageData);
+    await addMessage(req.body.receiverEmail, messageData);
 
     res.status(StatusCodes.OK).json({
         message: "Message added",

@@ -35,6 +35,11 @@ const messageSchema: ObjectSchema = j.object().keys({
         "string.empty": "Receiver username is required",
         "any.required": "Receiver username is required"
     }),
+    receiverEmail: j.string().required().messages({
+        "string.base": "Receiver email is required",
+        "string.empty": "Receiver email is required",
+        "any.required": "Receiver email is required"
+    }),
     receiverPicture: j.string().required().messages({
         "string.base": "Receiver picture is required",
         "string.empty": "Receiver picture is required",
