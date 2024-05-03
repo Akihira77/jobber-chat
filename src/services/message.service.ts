@@ -225,7 +225,7 @@ export async function updateOffer(
             {
                 new: true
             }
-        ).exec()) as IMessageDocument;
+        ).lean().exec()) as IMessageDocument;
 
         return result;
     } catch (error) {
@@ -248,7 +248,7 @@ export async function markMessageAsRead(
             {
                 new: true
             }
-        ).exec()) as IMessageDocument;
+        ).lean().exec()) as IMessageDocument;
 
         socketIOChatObject.emit("message_updated", result);
 
