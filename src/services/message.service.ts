@@ -1,5 +1,6 @@
 import { ELASTIC_SEARCH_URL, exchangeNamesAndRoutingKeys } from "@chat/config";
 import {
+    BadRequestError,
     IConversationDocument,
     IMessageDetails,
     IMessageDocument,
@@ -213,9 +214,16 @@ export async function getUserMessages(
 export async function updateOffer(
     messageId: string,
     type: string
-): Promise<IMessageDocument> {
+): Promise<IMessageDocument | null> {
     try {
-        const result = (await MessageModel.findByIdAndUpdate(
+        if (!["cancelled", "accepted"].includes(type)) {
+            throw new BadRequestError(
+                "offer type is incorrect",
+                "MessageService updateOffer() method error"
+            );
+        }
+
+        const result = await MessageModel.findByIdAndUpdate(
             { _id: messageId },
             {
                 $set: {
@@ -225,7 +233,9 @@ export async function updateOffer(
             {
                 new: true
             }
-        ).lean().exec()) as IMessageDocument;
+        )
+            .lean()
+            .exec();
 
         return result;
     } catch (error) {
@@ -248,7 +258,9 @@ export async function markMessageAsRead(
             {
                 new: true
             }
-        ).lean().exec()) as IMessageDocument;
+        )
+            .lean()
+            .exec()) as IMessageDocument;
 
         socketIOChatObject.emit("message_updated", result);
 
