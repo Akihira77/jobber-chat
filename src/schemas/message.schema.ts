@@ -1,65 +1,65 @@
-import j, { ObjectSchema } from "joi";
+import Joi, { ObjectSchema } from "joi";
 
-const messageSchema: ObjectSchema = j.object().keys({
-    conversationId: j.string().optional().allow(null, ""),
-    _id: j.string().optional(),
-    body: j.string().optional().allow(null, ""),
-    hasConversationId: j.boolean().optional(), // this is only for checking if conversation id exist
-    file: j.string().optional().allow(null, ""),
-    fileType: j.string().optional().allow(null, ""),
-    fileName: j.string().optional().allow(null, ""),
-    fileSize: j.string().optional().allow(null, ""),
-    gigId: j.string().optional().allow(null, ""),
-    sellerId: j.string().required().messages({
+const messageSchema: ObjectSchema = Joi.object().keys({
+    conversationId: Joi.string().optional().allow(null, ""),
+    _id: Joi.string().optional(),
+    body: Joi.string().optional().allow(null, ""),
+    hasConversationId: Joi.boolean().optional(), // this is only for checking if conversation id exist
+    file: Joi.string().optional().allow(null, ""),
+    fileType: Joi.string().optional().allow(null, ""),
+    fileName: Joi.string().optional().allow(null, ""),
+    fileSize: Joi.string().optional().allow(null, ""),
+    gigId: Joi.string().optional().allow(null, ""),
+    sellerId: Joi.string().required().messages({
         "string.base": "Seller id is required",
         "string.empty": "Seller id is required",
         "any.required": "Seller id is required"
     }),
-    buyerId: j.string().required().messages({
+    buyerId: Joi.string().required().messages({
         "string.base": "Buyer id is required",
         "string.empty": "Buyer id is required",
         "any.required": "Buyer id is required"
     }),
-    senderUsername: j.string().required().messages({
+    senderUsername: Joi.string().required().messages({
         "string.base": "Sender username is required",
         "string.empty": "Sender username is required",
         "any.required": "Sender username is required"
     }),
-    senderPicture: j.string().required().messages({
+    senderPicture: Joi.string().required().messages({
         "string.base": "Sender picture is required",
         "string.empty": "Sender picture is required",
         "any.required": "Sender picture is required"
     }),
-    receiverUsername: j.string().required().messages({
+    receiverUsername: Joi.string().required().messages({
         "string.base": "Receiver username is required",
         "string.empty": "Receiver username is required",
         "any.required": "Receiver username is required"
     }),
-    receiverEmail: j.string().required().messages({
+    receiverEmail: Joi.string().required().messages({
         "string.base": "Receiver email is required",
         "string.empty": "Receiver email is required",
         "any.required": "Receiver email is required"
     }),
-    receiverPicture: j.string().required().messages({
+    receiverPicture: Joi.string().required().messages({
         "string.base": "Receiver picture is required",
         "string.empty": "Receiver picture is required",
         "any.required": "Receiver picture is required"
     }),
-    isRead: j.boolean().optional(),
-    hasOffer: j.boolean().optional(),
-    offer: j
+    isRead: Joi.boolean().optional(),
+    hasOffer: Joi.boolean().optional(),
+    offer: Joi
         .object({
-            gigTitle: j.string().optional(),
-            price: j.number().optional(),
-            description: j.string().optional(),
-            deliveryInDays: j.number().optional(),
-            oldDeliveryDate: j.string().optional(),
-            newDeliveryDate: j.string().optional(),
-            accepted: j.boolean().optional(),
-            cancelled: j.boolean().optional()
+            gigTitle: Joi.string().optional(),
+            price: Joi.number().optional(),
+            description: Joi.string().optional(),
+            deliveryInDays: Joi.number().optional(),
+            oldDeliveryDate: Joi.string().optional(),
+            newDeliveryDate: Joi.string().optional(),
+            accepted: Joi.boolean().optional(),
+            cancelled: Joi.boolean().optional()
         })
         .optional(),
-    createdAt: j.string().optional()
+    createdAt: Joi.string().optional()
 });
 
 export { messageSchema };

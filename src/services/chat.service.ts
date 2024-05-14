@@ -248,7 +248,7 @@ export async function markMessageAsRead(
     messageId: string
 ): Promise<IMessageDocument> {
     try {
-        const result = (await MessageModel.findByIdAndUpdate(
+        const message = (await MessageModel.findByIdAndUpdate(
             { _id: messageId },
             {
                 $set: {
@@ -262,9 +262,9 @@ export async function markMessageAsRead(
             .lean()
             .exec()) as IMessageDocument;
 
-        socketIOChatObject.emit("message_updated", result);
+        socketIOChatObject.emit("message_updated", message);
 
-        return result;
+        return message;
     } catch (error) {
         logger.error("MessageService markMessageAsRead() method error", error);
         throw error;

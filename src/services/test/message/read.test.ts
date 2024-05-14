@@ -1,12 +1,10 @@
 import { databaseConnection } from "@chat/database";
-import { getUserConversationList } from "@chat/services/message.service";
+import { getUserConversationList } from "@chat/services/chat.service";
 
 describe("Read/Get method", () => {
     beforeAll(async () => {
         await databaseConnection();
     });
-
-
 
     describe("getUserConversationList() method", () => {
         it("Should return array of conversations and the required fields", async () => {
