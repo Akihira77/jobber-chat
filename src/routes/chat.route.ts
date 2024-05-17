@@ -15,7 +15,10 @@ export function chatRoutes(): Router {
         chatController.findConversation
     );
     router.get("/conversations/:username", chatController.findConversationList);
-    router.get("/:senderUsername/:receiverUsername", chatController.findMessages);
+    router.get(
+        "/:senderUsername/:receiverUsername",
+        chatController.findMessages
+    );
     router.get("/:conversationId", chatController.findUserMessages);
 
     return router;

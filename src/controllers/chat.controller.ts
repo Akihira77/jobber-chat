@@ -1,9 +1,15 @@
-import { BadRequestError, uploads, IMessageDocument, IConversationDocument } from "@Akihira77/jobber-shared";
+import crypto from "crypto";
+
+import {
+    BadRequestError,
+    uploads,
+    IMessageDocument,
+    IConversationDocument
+} from "@Akihira77/jobber-shared";
 import { messageSchema } from "@chat/schemas/message.schema";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import crypto from "crypto";
-import * as chatService from "@chat/services/chat.service"
+import * as chatService from "@chat/services/chat.service";
 
 export async function addMessage(req: Request, res: Response): Promise<void> {
     const { error } = messageSchema.validate(req.body);
@@ -71,13 +77,14 @@ export async function addMessage(req: Request, res: Response): Promise<void> {
     });
 }
 
-export async function findConversation(req: Request, res: Response): Promise<void> {
+export async function findConversation(
+    req: Request,
+    res: Response
+): Promise<void> {
     const { senderUsername, receiverUsername } = req.params;
 
-    const conversations: IConversationDocument[] = await chatService.getConversation(
-        senderUsername,
-        receiverUsername
-    );
+    const conversations: IConversationDocument[] =
+        await chatService.getConversation(senderUsername, receiverUsername);
 
     res.status(StatusCodes.OK).json({
         message: "Chat conversation",
@@ -114,10 +121,14 @@ export async function findConversationList(
     });
 }
 
-export async function findUserMessages(req: Request, res: Response): Promise<void> {
+export async function findUserMessages(
+    req: Request,
+    res: Response
+): Promise<void> {
     const { conversationId } = req.params;
 
-    const messages: IMessageDocument[] = await chatService.getUserMessages(conversationId);
+    const messages: IMessageDocument[] =
+        await chatService.getUserMessages(conversationId);
 
     res.status(StatusCodes.OK).json({
         message: "Chat messages",

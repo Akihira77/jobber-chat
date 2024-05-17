@@ -1,14 +1,6 @@
-import { winstonLogger } from "@Akihira77/jobber-shared";
-import { ELASTIC_SEARCH_URL } from "@chat/config";
 import { Channel } from "amqplib";
-import { Logger } from "winston";
 import { createConnection } from "@chat/queues/connection";
-
-const log: Logger = winstonLogger(
-    `${ELASTIC_SEARCH_URL}`,
-    "chatServiceProducer",
-    "debug"
-);
+import { logger } from "@chat/config";
 
 export async function publishDirectMessage(
     channel: Channel,
@@ -26,9 +18,11 @@ export async function publishDirectMessage(
 
         channel.publish(exchangeName, routingKey, Buffer.from(message));
 
-        log.info(logMessage);
+        logger("queues/chat.producer.ts - publishDirectMessage()").info(
+            logMessage
+        );
     } catch (error) {
-        log.error(
+        logger("queues/chat.producer.ts - publishDirectMessage()").error(
             "ChatService QueueProducer publishDirectMessage() method error:",
             error
         );

@@ -47,18 +47,16 @@ const messageSchema: ObjectSchema = Joi.object().keys({
     }),
     isRead: Joi.boolean().optional(),
     hasOffer: Joi.boolean().optional(),
-    offer: Joi
-        .object({
-            gigTitle: Joi.string().optional(),
-            price: Joi.number().optional(),
-            description: Joi.string().optional(),
-            deliveryInDays: Joi.number().optional(),
-            oldDeliveryDate: Joi.string().optional(),
-            newDeliveryDate: Joi.string().optional(),
-            accepted: Joi.boolean().optional(),
-            cancelled: Joi.boolean().optional()
-        })
-        .optional(),
+    offer: Joi.object({
+        gigTitle: Joi.string().optional(),
+        price: Joi.number().optional(),
+        description: Joi.string().optional(),
+        deliveryInDays: Joi.number().optional(),
+        oldDeliveryDate: Joi.string().optional(),
+        newDeliveryDate: Joi.string().optional(),
+        accepted: Joi.boolean().optional(),
+        cancelled: Joi.boolean().optional()
+    }).optional(),
     createdAt: Joi.string().optional()
 });
 

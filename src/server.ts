@@ -6,16 +6,9 @@ import jwt from "jsonwebtoken";
 import {
     CustomError,
     IAuthPayload,
-    IErrorResponse,
-    winstonLogger
+    IErrorResponse
 } from "@Akihira77/jobber-shared";
-import { Logger } from "winston";
-import {
-    API_GATEWAY_URL,
-    ELASTIC_SEARCH_URL,
-    JWT_TOKEN,
-    PORT
-} from "@chat/config";
+import { API_GATEWAY_URL, JWT_TOKEN, logger, PORT } from "@chat/config";
 import {
     Application,
     NextFunction,
@@ -31,13 +24,8 @@ import { checkConnection } from "@chat/elasticsearch";
 import { appRoutes } from "@chat/routes";
 import { createConnection } from "@chat/queues/connection";
 import { Channel } from "amqplib";
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 
-const log: Logger = winstonLogger(
-    `${ELASTIC_SEARCH_URL}`,
-    "chatServer",
-    "debug"
-);
 export let chatChannel: Channel;
 export let socketIOChatObject: Server;
 
@@ -100,7 +88,10 @@ function chatErrorHandler(app: Application): void {
             res: Response,
             next: NextFunction
         ) => {
-            log.error(`ChatService ${error.comingFrom}:`, error);
+            logger("server.ts - chatErrorHandler()").error(
+                `ChatService ${error.comingFrom}:`,
+                error
+            );
 
             if (error instanceof CustomError) {
                 res.status(error.statusCode).json(error.serializeErrors());
@@ -116,8 +107,17 @@ async function startServer(app: Application): Promise<void> {
         socketIOChatObject = await createSocketIO(httpServer);
 
         startHttpServer(httpServer);
+
+        socketIOChatObject.on("connection", (socket: Socket) => {
+            logger("server.ts - startServer()").info(
+                `Socket receive a connection with id: ${socket.id}`
+            );
+        });
     } catch (error) {
-        log.error("ChatService startServer() method error:", error);
+        logger("server.ts - startServer()").error(
+            "ChatService startServer() method error:",
+            error
+        );
     }
 }
 
@@ -129,19 +129,26 @@ async function createSocketIO(httpServer: http.Server): Promise<Server> {
         }
     });
 
-    log.info("ChatService Socket connected");
+    logger("server.ts - createSocketIO()").info("ChatService Socket connected");
 
     return io;
 }
 
 function startHttpServer(httpServer: http.Server): void {
     try {
-        log.info(`Chat server has started with pid ${process.pid}`);
+        logger("server.ts - startHttpServer()").info(
+            `ChatService has started with pid ${process.pid}`
+        );
 
         httpServer.listen(Number(PORT), () => {
-            log.info(`Chat server running on port ${PORT}`);
+            logger("server.ts - startHttpServer()").info(
+                `ChatService running on port ${PORT}`
+            );
         });
     } catch (error) {
-        log.error("ChatService startHttpServer() method error:", error);
+        logger("server.ts - startHttpServer()").error(
+            "ChatService startHttpServer() method error:",
+            error
+        );
     }
 }
