@@ -25,6 +25,7 @@ import { appRoutes } from "@chat/routes";
 import { createConnection } from "@chat/queues/connection";
 import { Channel } from "amqplib";
 import { Server, Socket } from "socket.io";
+import morgan from "morgan";
 
 export let chatChannel: Channel;
 export let socketIOChatObject: Server;
@@ -66,6 +67,7 @@ function standardMiddleware(app: Application): void {
     app.use(compression());
     app.use(json({ limit: "200mb" }));
     app.use(urlencoded({ extended: true, limit: "200mb" }));
+    app.use(morgan("dev"));
 }
 
 function routesMiddleware(app: Application): void {
