@@ -1,25 +1,37 @@
+import { ChatController } from "@chat/controllers/chat.controller";
 import express, { Router } from "express";
-import * as chatController from "@chat/controllers/chat.controller";
 
 const router = express.Router();
 
-export function chatRoutes(): Router {
-    router.post("/", chatController.addMessage);
+export function chatRoutes(controller: ChatController): Router {
+    router.post("/", controller.addMessage.bind(controller));
 
-    router.put("/offer", chatController.updateOffer);
-    router.put("/mark-as-read", chatController.markSingleMessageAsRead);
-    router.put("/mark-multiple-as-read", chatController.markMessagesAsRead);
+    router.put("/offer", controller.updateOffer.bind(controller));
+    router.put(
+        "/mark-as-read",
+        controller.markSingleMessageAsRead.bind(controller)
+    );
+    router.put(
+        "/mark-multiple-as-read",
+        controller.markMessagesAsRead.bind(controller)
+    );
 
     router.get(
         "/conversation/:senderUsername/:receiverUsername",
-        chatController.findConversation
+        controller.findConversation.bind(controller)
     );
-    router.get("/conversations/:username", chatController.findConversationList);
+    router.get(
+        "/conversations/:username",
+        controller.findConversationList.bind(controller)
+    );
     router.get(
         "/:senderUsername/:receiverUsername",
-        chatController.findMessages
+        controller.findMessages.bind(controller)
     );
-    router.get("/:conversationId", chatController.findUserMessages);
+    router.get(
+        "/:conversationId",
+        controller.findUserMessages.bind(controller)
+    );
 
     return router;
 }

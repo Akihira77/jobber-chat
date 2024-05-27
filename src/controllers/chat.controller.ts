@@ -9,171 +9,163 @@ import {
 import { messageSchema } from "@chat/schemas/message.schema";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import * as chatService from "@chat/services/chat.service";
+import { ChatService } from "@chat/services/chat.service";
 
-export async function addMessage(req: Request, res: Response): Promise<void> {
-    const { error } = messageSchema.validate(req.body);
+export class ChatController {
+    constructor(private chatService: ChatService) {}
 
-    if (error?.details) {
-        throw new BadRequestError(
-            error.details[0].message,
-            "Create message() method"
-        );
-    }
+    async addMessage(req: Request, res: Response): Promise<void> {
+        const { error } = messageSchema.validate(req.body);
 
-    let file: string = req.body.file;
-    const randomBytes: Buffer = crypto.randomBytes(20);
-    const randomCharacters: string = randomBytes.toString("hex");
-
-    if (file) {
-        const result =
-            req.body.fileType === "zip"
-                ? await uploads(file, `${randomCharacters}.zip`)
-                : await uploads(file);
-
-        if (!result?.public_id) {
+        if (error?.details) {
             throw new BadRequestError(
-                "File upload error. Try again",
+                error.details[0].message,
                 "Create message() method"
             );
         }
 
-        file = result?.secure_url;
+        let file: string = req.body.file;
+        const randomBytes: Buffer = crypto.randomBytes(20);
+        const randomCharacters: string = randomBytes.toString("hex");
+
+        if (file) {
+            const result =
+                req.body.fileType === "zip"
+                    ? await uploads(file, `${randomCharacters}.zip`)
+                    : await uploads(file);
+
+            if (!result?.public_id) {
+                throw new BadRequestError(
+                    "File upload error. Try again",
+                    "Create message() method"
+                );
+            }
+
+            file = result?.secure_url;
+        }
+
+        const messageData: IMessageDocument = {
+            conversationId: req.body.conversationId,
+            body: req.body.body,
+            file,
+            fileType: req.body.fileType,
+            fileSize: req.body.fileSize,
+            fileName: req.body.fileName,
+            gigId: req.body.gigId,
+            buyerId: req.body.buyerId,
+            sellerId: req.body.sellerId,
+            senderUsername: req.body.senderUsername,
+            senderPicture: req.body.senderPicture,
+            receiverUsername: req.body.receiverUsername,
+            receiverPicture: req.body.receiverPicture,
+            isRead: req.body.isRead,
+            hasOffer: req.body.hasOffer,
+            offer: req.body.offer
+        };
+
+        if (!req.body.hasConversationId) {
+            await this.chatService.createConversation(
+                String(req.body.conversationId),
+                messageData.senderUsername!,
+                messageData.receiverUsername!
+            );
+        }
+
+        await this.chatService.addMessage(req.body.receiverEmail, messageData);
+
+        res.status(StatusCodes.OK).json({
+            message: "Message added",
+            conversationId: req.body.conversationId,
+            messageData
+        });
     }
 
-    const messageData: IMessageDocument = {
-        conversationId: req.body.conversationId,
-        body: req.body.body,
-        file,
-        fileType: req.body.fileType,
-        fileSize: req.body.fileSize,
-        fileName: req.body.fileName,
-        gigId: req.body.gigId,
-        buyerId: req.body.buyerId,
-        sellerId: req.body.sellerId,
-        senderUsername: req.body.senderUsername,
-        senderPicture: req.body.senderPicture,
-        receiverUsername: req.body.receiverUsername,
-        receiverPicture: req.body.receiverPicture,
-        isRead: req.body.isRead,
-        hasOffer: req.body.hasOffer,
-        offer: req.body.offer
-    };
+    async findConversation(req: Request, res: Response): Promise<void> {
+        const { senderUsername, receiverUsername } = req.params;
 
-    if (!req.body.hasConversationId) {
-        await chatService.createConversation(
-            String(req.body.conversationId),
-            messageData.senderUsername!,
-            messageData.receiverUsername!
+        const conversations: IConversationDocument[] =
+            await this.chatService.getConversation(
+                senderUsername,
+                receiverUsername
+            );
+
+        res.status(StatusCodes.OK).json({
+            message: "Chat conversation",
+            conversations
+        });
+    }
+
+    async findMessages(req: Request, res: Response): Promise<void> {
+        const { senderUsername, receiverUsername } = req.params;
+
+        const messages: IMessageDocument[] = await this.chatService.getMessages(
+            senderUsername,
+            receiverUsername
         );
+
+        res.status(StatusCodes.OK).json({
+            message: "Chat messages",
+            messages
+        });
     }
 
-    await chatService.addMessage(req.body.receiverEmail, messageData);
+    async findConversationList(req: Request, res: Response): Promise<void> {
+        const { username } = req.params;
 
-    res.status(StatusCodes.OK).json({
-        message: "Message added",
-        conversationId: req.body.conversationId,
-        messageData
-    });
-}
+        const conversations: IMessageDocument[] =
+            await this.chatService.getUserConversationList(username);
 
-export async function findConversation(
-    req: Request,
-    res: Response
-): Promise<void> {
-    const { senderUsername, receiverUsername } = req.params;
+        res.status(StatusCodes.OK).json({
+            message: "Conversation list",
+            conversations
+        });
+    }
 
-    const conversations: IConversationDocument[] =
-        await chatService.getConversation(senderUsername, receiverUsername);
+    async findUserMessages(req: Request, res: Response): Promise<void> {
+        const { conversationId } = req.params;
 
-    res.status(StatusCodes.OK).json({
-        message: "Chat conversation",
-        conversations
-    });
-}
+        const messages: IMessageDocument[] =
+            await this.chatService.getUserMessages(conversationId);
 
-export async function findMessages(req: Request, res: Response): Promise<void> {
-    const { senderUsername, receiverUsername } = req.params;
+        res.status(StatusCodes.OK).json({
+            message: "Chat messages",
+            messages
+        });
+    }
 
-    const messages: IMessageDocument[] = await chatService.getMessages(
-        senderUsername,
-        receiverUsername
-    );
+    async updateOffer(req: Request, res: Response): Promise<void> {
+        const { messageId, type } = req.body;
 
-    res.status(StatusCodes.OK).json({
-        message: "Chat messages",
-        messages
-    });
-}
+        const result = await this.chatService.updateOffer(messageId, type);
 
-export async function findConversationList(
-    req: Request,
-    res: Response
-): Promise<void> {
-    const { username } = req.params;
+        res.status(StatusCodes.OK).json({
+            message: "Message updated",
+            singleMessage: result
+        });
+    }
 
-    const conversations: IMessageDocument[] =
-        await chatService.getUserConversationList(username);
+    async markMessagesAsRead(req: Request, res: Response): Promise<void> {
+        const { messageId, senderUsername, receiverUsername } = req.body;
 
-    res.status(StatusCodes.OK).json({
-        message: "Conversation list",
-        conversations
-    });
-}
+        await this.chatService.markMultipleMessagesAsRead(
+            senderUsername,
+            receiverUsername,
+            messageId
+        );
 
-export async function findUserMessages(
-    req: Request,
-    res: Response
-): Promise<void> {
-    const { conversationId } = req.params;
+        res.status(StatusCodes.OK).json({
+            message: "Messages marked as read"
+        });
+    }
 
-    const messages: IMessageDocument[] =
-        await chatService.getUserMessages(conversationId);
+    async markSingleMessageAsRead(req: Request, res: Response): Promise<void> {
+        const { messageId } = req.body;
 
-    res.status(StatusCodes.OK).json({
-        message: "Chat messages",
-        messages
-    });
-}
+        const result = await this.chatService.markMessageAsRead(messageId);
 
-export async function updateOffer(req: Request, res: Response): Promise<void> {
-    const { messageId, type } = req.body;
-
-    const result = await chatService.updateOffer(messageId, type);
-
-    res.status(StatusCodes.OK).json({
-        message: "Message updated",
-        singleMessage: result
-    });
-}
-
-export async function markMessagesAsRead(
-    req: Request,
-    res: Response
-): Promise<void> {
-    const { messageId, senderUsername, receiverUsername } = req.body;
-
-    await chatService.markMultipleMessagesAsRead(
-        senderUsername,
-        receiverUsername,
-        messageId
-    );
-
-    res.status(StatusCodes.OK).json({
-        message: "Messages marked as read"
-    });
-}
-
-export async function markSingleMessageAsRead(
-    req: Request,
-    res: Response
-): Promise<void> {
-    const { messageId } = req.body;
-
-    const result = await chatService.markMessageAsRead(messageId);
-
-    res.status(StatusCodes.OK).json({
-        message: "Message marked as read",
-        singleMessage: result
-    });
+        res.status(StatusCodes.OK).json({
+            message: "Message marked as read",
+            singleMessage: result
+        });
+    }
 }
