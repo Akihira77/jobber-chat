@@ -82,9 +82,9 @@ function routesMiddleware(
 async function startQueues(
     logger: (moduleName: string) => Logger
 ): Promise<ChatQueue> {
-    const chatChannel = new ChatQueue(null, logger);
-    await chatChannel.createConnection();
-    return chatChannel;
+    const queue = new ChatQueue(null, logger);
+    await queue.createConnection();
+    return queue;
 }
 
 async function startElasticSearch(
