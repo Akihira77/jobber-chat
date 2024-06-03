@@ -1,78 +1,121 @@
 import http from "http";
-import "express-async-errors";
 
-import compression from "compression";
 import jwt from "jsonwebtoken";
 import {
     CustomError,
     IAuthPayload,
-    IErrorResponse
+    NotAuthorizedError
 } from "@Akihira77/jobber-shared";
 import { API_GATEWAY_URL, JWT_TOKEN, PORT } from "@chat/config";
-import {
-    Application,
-    NextFunction,
-    Request,
-    Response,
-    json,
-    urlencoded
-} from "express";
-import hpp from "hpp";
-import helmet from "helmet";
-import cors from "cors";
 import { ElasicSearchClient } from "@chat/elasticsearch";
 import { appRoutes } from "@chat/routes";
 import { Server, Socket } from "socket.io";
 import { Logger } from "winston";
+import { Context, Hono, Next } from "hono";
+import { cors } from "hono/cors";
+import { compress } from "hono/compress";
+import { timeout } from "hono/timeout";
+import { csrf } from "hono/csrf";
+import { secureHeaders } from "hono/secure-headers";
+import { bodyLimit } from "hono/body-limit";
+import { rateLimiter } from "hono-rate-limiter";
+import { HTTPException } from "hono/http-exception";
+import { StatusCodes } from "http-status-codes";
+import { StatusCode } from "hono/utils/http-status";
+import { ServerType } from "@hono/node-server/dist/types";
+import { serve } from "@hono/node-server";
 
 import { ChatQueue } from "./queues/chat.queue";
 
 export let socketIOChatObject: Server;
+const LIMIT_TIMEOUT = 2 * 1000; // 2s
 
 export async function start(
-    app: Application,
+    app: Hono,
     logger: (moduleName: string) => Logger
 ): Promise<void> {
     const queue = await startQueues(logger);
     await startElasticSearch(logger);
+    chatErrorHandler(app);
     securityMiddleware(app);
     standardMiddleware(app);
     routesMiddleware(app, queue, logger);
-    chatErrorHandler(app, logger);
     startServer(app, logger);
 }
 
-function securityMiddleware(app: Application): void {
-    app.set("trust proxy", 1);
-    app.use(hpp());
-    app.use(helmet());
+function securityMiddleware(app: Hono): void {
+    app.use(
+        timeout(LIMIT_TIMEOUT, () => {
+            return new HTTPException(StatusCodes.REQUEST_TIMEOUT, {
+                message: `Request timeout after waiting ${LIMIT_TIMEOUT}ms. Please try again later.`
+            });
+        })
+    );
+    app.use(secureHeaders());
+    app.use(csrf());
     app.use(
         cors({
             origin: [`${API_GATEWAY_URL}`],
             credentials: true,
-            methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+            allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
         })
     );
 
-    app.use((req: Request, _res: Response, next: NextFunction) => {
-        if (req.headers.authorization) {
-            const token = req.headers.authorization.split(" ")[1];
-            const payload = jwt.verify(token, JWT_TOKEN!) as IAuthPayload;
-
-            req.currentUser = payload;
+    app.use(async (c: Context, next: Next) => {
+        if (c.req.path == "/chat-health") {
+            await next();
+            return;
         }
-        next();
+
+        const authorization = c.req.header("authorization");
+        if (!authorization || authorization === "") {
+            throw new NotAuthorizedError(
+                "unauthenticated request",
+                "Chat Service"
+            );
+        }
+
+        const token = authorization.split(" ")[1];
+        const payload = jwt.verify(token, JWT_TOKEN!) as IAuthPayload;
+
+        c.set("currentUser", payload);
+        await next();
     });
 }
 
-function standardMiddleware(app: Application): void {
-    app.use(compression());
-    app.use(json({ limit: "200mb" }));
-    app.use(urlencoded({ extended: true, limit: "200mb" }));
+function standardMiddleware(app: Hono): void {
+    app.use(compress());
+    app.use(
+        bodyLimit({
+            maxSize: 2 * 100 * 1000 * 1024, //200mb
+            onError(c: Context) {
+                return c.text(
+                    "Your request is too big",
+                    StatusCodes.REQUEST_HEADER_FIELDS_TOO_LARGE
+                );
+            }
+        })
+    );
+
+    const generateRandomNumber = (length: number): number => {
+        return (
+            Math.floor(Math.random() * (9 * Math.pow(10, length - 1))) +
+            Math.pow(10, length - 1)
+        );
+    };
+
+    app.use(
+        rateLimiter({
+            windowMs: 1 * 60 * 1000, //60s
+            limit: 10,
+            standardHeaders: "draft-6",
+            keyGenerator: () => generateRandomNumber(12).toString()
+        })
+    );
 }
 
 function routesMiddleware(
-    app: Application,
+    app: Hono,
     queue: ChatQueue,
     logger: (moduleName: string) => Logger
 ): void {
@@ -94,39 +137,39 @@ async function startElasticSearch(
     await elastic.checkConnection();
 }
 
-function chatErrorHandler(
-    app: Application,
-    logger: (moduleName: string) => Logger
-): void {
-    app.use(
-        (
-            error: IErrorResponse,
-            _req: Request,
-            res: Response,
-            next: NextFunction
-        ) => {
-            logger("server.ts - chatErrorHandler()").error(
-                `ChatService ${error.comingFrom}:`,
-                error
-            );
+function chatErrorHandler(app: Hono): void {
+    app.notFound((c) => {
+        return c.text("Route path is not found", StatusCodes.NOT_FOUND);
+    });
 
-            if (error instanceof CustomError) {
-                res.status(error.statusCode).json(error.serializeErrors());
-            }
-            next();
+    app.onError((err: Error, c: Context) => {
+        if (err instanceof CustomError) {
+            return c.json(
+                err.serializeErrors(),
+                (err.statusCode as StatusCode) ??
+                    StatusCodes.INTERNAL_SERVER_ERROR
+            );
+        } else if (err instanceof HTTPException) {
+            return err.getResponse();
         }
-    );
+
+        return c.text(
+            "Unexpected error occured. Please try again",
+            StatusCodes.INTERNAL_SERVER_ERROR
+        );
+    });
 }
 
 async function startServer(
-    app: Application,
+    app: Hono,
     logger: (moduleName: string) => Logger
 ): Promise<void> {
     try {
-        const httpServer: http.Server = new http.Server(app);
-        socketIOChatObject = await createSocketIO(httpServer, logger);
-
-        startHttpServer(httpServer, logger);
+        const server = startHttpServer(app, logger);
+        socketIOChatObject = await createSocketIO(
+            server as http.Server,
+            logger
+        );
 
         socketIOChatObject.on("connection", (socket: Socket) => {
             logger("server.ts - startServer()").info(
@@ -158,23 +201,27 @@ async function createSocketIO(
 }
 
 function startHttpServer(
-    httpServer: http.Server,
+    hono: Hono,
     logger: (moduleName: string) => Logger
-): void {
+): ServerType {
     try {
         logger("server.ts - startHttpServer()").info(
             `ChatService has started with pid ${process.pid}`
         );
 
-        httpServer.listen(Number(PORT), () => {
+        const server = serve({ fetch: hono.fetch, port: Number(PORT) }, (info) => {
             logger("server.ts - startHttpServer()").info(
-                `ChatService running on port ${PORT}`
+                `ChatService running on port ${info.port}`
             );
         });
+
+        return server;
     } catch (error) {
         logger("server.ts - startHttpServer()").error(
             "ChatService startHttpServer() method error:",
             error
         );
+
+        process.exit(1);
     }
 }

@@ -1,15 +1,16 @@
 import { databaseConnection } from "@chat/database";
-import express, { Express } from "express";
 import { start } from "@chat/server";
 import cloudinary from "cloudinary";
+import { winstonLogger } from "@Akihira77/jobber-shared";
+import { Logger } from "winston";
+import { Hono } from "hono";
+
 import {
     CLOUD_API_KEY,
     CLOUD_API_SECRET,
     CLOUD_NAME,
     ELASTIC_SEARCH_URL
 } from "./config";
-import { winstonLogger } from "@Akihira77/jobber-shared";
-import { Logger } from "winston";
 
 const main = async (): Promise<void> => {
     const logger = (moduleName?: string): Logger =>
@@ -27,7 +28,11 @@ const main = async (): Promise<void> => {
         });
 
         const db = await databaseConnection(logger);
-        const app: Express = express();
+        logger("database.ts - databaseConnection()").info(
+            "ChatService MongoDB is connected."
+        );
+
+        const app = new Hono();
         await start(app, logger);
 
         process.once("exit", async () => {
