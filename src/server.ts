@@ -4,7 +4,6 @@ import jwt from "jsonwebtoken";
 import {
     CustomError,
     IAuthPayload,
-    NotAuthorizedError
 } from "@Akihira77/jobber-shared";
 import { API_GATEWAY_URL, JWT_TOKEN, PORT } from "@chat/config";
 import { ElasicSearchClient } from "@chat/elasticsearch";
@@ -51,8 +50,10 @@ function securityMiddleware(app: Hono): void {
             });
         })
     );
-    app.use(secureHeaders());
-    app.use(csrf());
+    app.use(
+        secureHeaders({ crossOriginEmbedderPolicy: true, xXssProtection: true })
+    );
+    app.use(csrf({ origin: [`${API_GATEWAY_URL}`] }));
     app.use(
         cors({
             origin: [`${API_GATEWAY_URL}`],
@@ -62,23 +63,13 @@ function securityMiddleware(app: Hono): void {
     );
 
     app.use(async (c: Context, next: Next) => {
-        if (c.req.path == "/chat-health") {
-            await next();
-            return;
-        }
-
         const authorization = c.req.header("authorization");
-        if (!authorization || authorization === "") {
-            throw new NotAuthorizedError(
-                "unauthenticated request",
-                "Chat Service"
-            );
+        if (authorization && authorization !== "") {
+            const token = authorization.split(" ")[1];
+            const payload = jwt.verify(token, JWT_TOKEN!) as IAuthPayload;
+            c.set("currentUser", payload);
         }
 
-        const token = authorization.split(" ")[1];
-        const payload = jwt.verify(token, JWT_TOKEN!) as IAuthPayload;
-
-        c.set("currentUser", payload);
         await next();
     });
 }
@@ -176,6 +167,13 @@ async function startServer(
                 `Socket receive a connection with id: ${socket.id}`
             );
         });
+
+        socketIOChatObject.engine.on("connection_error", (err) => {
+            console.log(err.req); // the request object
+            console.log(err.code); // the error code, for example 1
+            console.log(err.message); // the error message, for example "Session ID unknown"
+            console.log(err.context); // some additional error context
+        });
     } catch (error) {
         logger("server.ts - startServer()").error(
             "ChatService startServer() method error:",
@@ -191,7 +189,8 @@ async function createSocketIO(
     const io: Server = new Server(httpServer, {
         cors: {
             origin: ["*"],
-            methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+            methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            credentials: true
         }
     });
 
@@ -209,11 +208,18 @@ function startHttpServer(
             `ChatService has started with pid ${process.pid}`
         );
 
-        const server = serve({ fetch: hono.fetch, port: Number(PORT) }, (info) => {
-            logger("server.ts - startHttpServer()").info(
-                `ChatService running on port ${info.port}`
-            );
-        });
+        const server = serve(
+            {
+                fetch: hono.fetch,
+                port: Number(PORT),
+                createServer: http.createServer
+            },
+            (info) => {
+                logger("server.ts - startHttpServer()").info(
+                    `ChatService running on port ${info.port}`
+                );
+            }
+        );
 
         return server;
     } catch (error) {
