@@ -1,20 +1,13 @@
-import { DATABASE_URL } from "@chat/config";
-import mongoose, { Mongoose } from "mongoose";
-import { Logger } from "winston";
+import { DATABASE_URL } from "@chat/config"
+import mongoose, { Mongoose } from "mongoose"
 
-export const databaseConnection = async (
-    logger: (moduleName: string) => Logger
-): Promise<Mongoose> => {
+export const databaseConnection = async (): Promise<Mongoose> => {
     try {
         // console.log(DATABASE_URL);
-        const db = await mongoose.connect(`${DATABASE_URL}`);
-        return db;
+        const db = await mongoose.connect(`${DATABASE_URL}`)
+        return db
     } catch (error) {
-        logger("database.ts - databaseConnection()").error(
-            "ChatService databaseConnection() method error:",
-            error
-        );
-
-        throw error;
+        console.log(error)
+        throw error
     }
-};
+}

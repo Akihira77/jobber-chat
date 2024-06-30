@@ -1,15 +1,16 @@
-import { Logger } from "winston";
-import jwt from "jsonwebtoken";
-import { Context, Hono, Next } from "hono";
-import { StatusCodes } from "http-status-codes";
-import { NotAuthorizedError } from "@Akihira77/jobber-shared";
+import { Logger } from "winston"
+import jwt from "jsonwebtoken"
+import { Context, Hono, Next } from "hono"
+import { StatusCodes } from "http-status-codes"
+import { NotAuthorizedError } from "@Akihira77/jobber-shared"
 
-import { ChatQueue } from "./queues/chat.queue";
-import { ChatService } from "./services/chat.service";
-import { ChatHandler } from "./handler/chat.handler";
-import { GATEWAY_JWT_TOKEN } from "./config";
+import { ChatQueue } from "./queues/chat.queue"
+import { ChatService } from "./services/chat.service"
+import { ChatHandler } from "./handler/chat.handler"
+import { GATEWAY_JWT_TOKEN } from "./config"
 
-const BASE_PATH = "/api/v1/message";
+// const BASE_PATH = "/api/v1/message"
+const BASE_PATH = "/message"
 
 export function appRoutes(
     app: Hono,
@@ -17,16 +18,18 @@ export function appRoutes(
     logger: (moduleName: string) => Logger
 ): void {
     app.get("chat-health", (c: Context) => {
-        return c.text("Chat service is healthy and OK.", StatusCodes.OK);
-    });
+        return c.text("Chat service is healthy and OK.", StatusCodes.OK)
+    })
 
-    const chatSvc = new ChatService(logger, queue);
-    const chatController = new ChatHandler(chatSvc);
+    const chatSvc = new ChatService(logger, queue)
+    const chatController = new ChatHandler(chatSvc)
 
-    const api = app.basePath(BASE_PATH);
-    api.use(verifyGatewayRequest);
+    const api = app.basePath(BASE_PATH)
+    // api.use(verifyGatewayRequest, authOnly);
 
-    chatRoute(api, chatController);
+    api.use(authOnly)
+    chatRoute(api, chatController)
+    api.use(verifyGatewayRequest)
 }
 
 function chatRoute(
@@ -34,9 +37,8 @@ function chatRoute(
     chatHndlr: ChatHandler
 ): void {
     api.post("/", async (c: Context) => {
-        const jsonBody = await c.req.json();
-        const messageData =
-            await chatHndlr.addMessage.bind(chatHndlr)(jsonBody);
+        const jsonBody = await c.req.json()
+        const messageData = await chatHndlr.addMessage.bind(chatHndlr)(jsonBody)
 
         return c.json(
             {
@@ -44,16 +46,25 @@ function chatRoute(
                 conversationId: jsonBody.conversationId,
                 messageData
             },
-            StatusCodes.OK
-        );
-    });
+            StatusCodes.CREATED
+        )
+    })
 
     api.put("/offer", async (c: Context) => {
-        const { messageId, type } = await c.req.json();
+        const { messageId, type } = await c.req.json()
         const message = await chatHndlr.updateOffer.bind(chatHndlr)(
             messageId,
             type
-        );
+        )
+
+        if (!message) {
+            return c.json(
+                {
+                    message: "Message did not found"
+                },
+                StatusCodes.NOT_FOUND
+            )
+        }
 
         return c.json(
             {
@@ -61,13 +72,22 @@ function chatRoute(
                 singleMessage: message
             },
             StatusCodes.OK
-        );
-    });
+        )
+    })
 
     api.put("/mark-as-read", async (c: Context) => {
-        const { messageId } = await c.req.json();
+        const { messageId } = await c.req.json()
         const message =
-            await chatHndlr.markSingleMessageAsRead.bind(chatHndlr)(messageId);
+            await chatHndlr.markSingleMessageAsRead.bind(chatHndlr)(messageId)
+
+        if (!message) {
+            return c.json(
+                {
+                    message: "Message did not found"
+                },
+                StatusCodes.NOT_FOUND
+            )
+        }
 
         return c.json(
             {
@@ -75,33 +95,40 @@ function chatRoute(
                 singleMessage: message
             },
             StatusCodes.OK
-        );
-    });
+        )
+    })
 
     api.put("/mark-multiple-as-read", async (c: Context) => {
         const { messageId, senderUsername, receiverUsername } =
-            await c.req.json();
-        await chatHndlr.markMessagesAsRead.bind(chatHndlr)(
-            messageId,
-            senderUsername,
-            receiverUsername
-        );
+            await c.req.json()
+        const messageFromDb = await chatHndlr.markMessagesAsRead.bind(
+            chatHndlr
+        )(messageId, senderUsername, receiverUsername)
+
+        if (!messageFromDb) {
+            return c.json(
+                {
+                    message: "Message did not found"
+                },
+                StatusCodes.NOT_FOUND
+            )
+        }
 
         return c.json(
             {
                 message: "Messages marked as read"
             },
             StatusCodes.OK
-        );
-    });
+        )
+    })
 
     api.get(
         "/conversation/:senderUsername/:receiverUsername",
         async (c: Context) => {
-            const { senderUsername, receiverUsername } = c.req.param();
+            const { senderUsername, receiverUsername } = c.req.param()
             const conversations = await chatHndlr.findConversation.bind(
                 chatHndlr
-            )(senderUsername, receiverUsername);
+            )(senderUsername, receiverUsername)
 
             return c.json(
                 {
@@ -109,13 +136,13 @@ function chatRoute(
                     conversations
                 },
                 StatusCodes.OK
-            );
+            )
         }
-    );
+    )
     api.get("/conversations/:username", async (c: Context) => {
-        const username = c.req.param("username");
+        const username = c.req.param("username")
         const conversations =
-            await chatHndlr.findConversationList.bind(chatHndlr)(username);
+            await chatHndlr.findConversationList.bind(chatHndlr)(username)
 
         return c.json(
             {
@@ -123,14 +150,14 @@ function chatRoute(
                 conversations
             },
             StatusCodes.OK
-        );
-    });
+        )
+    })
     api.get("/:senderUsername/:receiverUsername", async (c: Context) => {
-        const { senderUsername, receiverUsername } = c.req.param();
+        const { senderUsername, receiverUsername } = c.req.param()
         const messages = await chatHndlr.findMessages.bind(chatHndlr)(
             senderUsername,
             receiverUsername
-        );
+        )
 
         return c.json(
             {
@@ -138,12 +165,12 @@ function chatRoute(
                 messages
             },
             StatusCodes.OK
-        );
-    });
+        )
+    })
     api.get("/:conversationId", async (c: Context) => {
-        const conversationId = c.req.param("conversationId");
+        const conversationId = c.req.param("conversationId")
         const messages =
-            await chatHndlr.findUserMessages.bind(chatHndlr)(conversationId);
+            await chatHndlr.findUserMessages.bind(chatHndlr)(conversationId)
 
         return c.json(
             {
@@ -151,17 +178,17 @@ function chatRoute(
                 messages
             },
             StatusCodes.OK
-        );
-    });
+        )
+    })
 }
 
 async function verifyGatewayRequest(c: Context, next: Next): Promise<void> {
-    const token = c.req.header("gatewayToken");
+    const token = c.req.header("gatewayToken")
     if (!token) {
         throw new NotAuthorizedError(
             "Invalid request",
             "verifyGatewayRequest() method: Request not coming from api gateway"
-        );
+        )
     }
 
     try {
@@ -169,16 +196,26 @@ async function verifyGatewayRequest(c: Context, next: Next): Promise<void> {
             token,
             GATEWAY_JWT_TOKEN!
         ) as {
-            id: string;
-            iat: number;
-        };
+            id: string
+            iat: number
+        }
 
-        c.set("gatewayToken", payload);
-        await next();
+        c.set("gatewayToken", payload)
+        await next()
     } catch (error) {
-        throw new NotAuthorizedError(
-            "Invalid request",
-            "verifyGatewayRequest() method: Request not coming from api gateway"
-        );
+        c.text("User cannot access the resource.", StatusCodes.FORBIDDEN)
+        return
     }
+}
+
+async function authOnly(c: Context, next: Next): Promise<void> {
+    const currUser = c.get("currentUser")
+    if (currUser && Object.keys(currUser).length > 0) {
+        return await next()
+    }
+
+    throw new NotAuthorizedError(
+        "User is not authenticated. Please signin first.",
+        "routes.ts - authOnly() method"
+    )
 }

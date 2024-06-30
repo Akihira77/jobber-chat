@@ -1,45 +1,45 @@
-import crypto from "crypto";
+import crypto from "crypto"
 
 import {
     BadRequestError,
     uploads,
     IMessageDocument,
     IConversationDocument
-} from "@Akihira77/jobber-shared";
-import { messageSchema } from "@chat/schemas/message.schema";
-import { ChatService } from "@chat/services/chat.service";
+} from "@Akihira77/jobber-shared"
+import { messageSchema } from "@chat/schemas/message.schema"
+import { ChatService } from "@chat/services/chat.service"
 
 export class ChatHandler {
     constructor(private chatService: ChatService) {}
 
     async addMessage(reqBody: any): Promise<IMessageDocument> {
-        const { error, value } = messageSchema.validate(reqBody);
+        const { error, value } = messageSchema.validate(reqBody)
 
         if (error?.details) {
             throw new BadRequestError(
                 error.details[0].message,
                 "Create message() method"
-            );
+            )
         }
 
-        let file: string = value.file;
-        const randomBytes: Buffer = crypto.randomBytes(20);
-        const randomCharacters: string = randomBytes.toString("hex");
+        let file: string = value.file
+        const randomBytes: Buffer = crypto.randomBytes(20)
+        const randomCharacters: string = randomBytes.toString("hex")
 
         if (file) {
             const result =
                 value.fileType === "zip"
                     ? await uploads(file, `${randomCharacters}.zip`)
-                    : await uploads(file);
+                    : await uploads(file)
 
             if (!result?.public_id) {
                 throw new BadRequestError(
                     "File upload error. Try again",
                     "Create message() method"
-                );
+                )
             }
 
-            file = result?.secure_url;
+            file = result?.secure_url
         }
 
         const messageData: IMessageDocument = {
@@ -59,19 +59,19 @@ export class ChatHandler {
             isRead: value.isRead,
             hasOffer: value.hasOffer,
             offer: value.offer
-        };
+        }
 
         if (!value.hasConversationId) {
             await this.chatService.createConversation(
                 String(value.conversationId),
                 messageData.senderUsername!,
                 messageData.receiverUsername!
-            );
+            )
         }
 
-        await this.chatService.addMessage(reqBody.receiverEmail, messageData);
+        await this.chatService.addMessage(reqBody.receiverEmail, messageData)
 
-        return messageData;
+        return messageData
     }
 
     async findConversation(
@@ -82,9 +82,9 @@ export class ChatHandler {
             await this.chatService.getConversation(
                 senderUsername,
                 receiverUsername
-            );
+            )
 
-        return conversations;
+        return conversations
     }
 
     async findMessages(
@@ -94,55 +94,55 @@ export class ChatHandler {
         const messages: IMessageDocument[] = await this.chatService.getMessages(
             senderUsername,
             receiverUsername
-        );
+        )
 
-        return messages;
+        return messages
     }
 
     async findConversationList(username: string): Promise<IMessageDocument[]> {
         const conversations: IMessageDocument[] =
-            await this.chatService.getUserConversationList(username);
+            await this.chatService.getUserConversationList(username)
 
-        return conversations;
+        return conversations
     }
 
     async findUserMessages(
         conversationId: string
     ): Promise<IMessageDocument[]> {
         const messages: IMessageDocument[] =
-            await this.chatService.getUserMessages(conversationId);
+            await this.chatService.getUserMessages(conversationId)
 
-        return messages;
+        return messages
     }
 
     async updateOffer(
         messageId: string,
         type: string
     ): Promise<IMessageDocument | null> {
-        const result = await this.chatService.updateOffer(messageId, type);
+        const result = await this.chatService.updateOffer(messageId, type)
 
-        return result;
+        return result
     }
 
     async markMessagesAsRead(
         messageId: string,
         senderUsername: string,
         receiverUsername: string
-    ): Promise<IMessageDocument> {
+    ): Promise<IMessageDocument | null> {
         const message = await this.chatService.markMultipleMessagesAsRead(
             senderUsername,
             receiverUsername,
             messageId
-        );
+        )
 
-        return message;
+        return message
     }
 
     async markSingleMessageAsRead(
         messageId: string
-    ): Promise<IMessageDocument> {
-        const result = await this.chatService.markMessageAsRead(messageId);
+    ): Promise<IMessageDocument | null> {
+        const result = await this.chatService.markMessageAsRead(messageId)
 
-        return result;
+        return result
     }
 }

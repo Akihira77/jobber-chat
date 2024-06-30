@@ -1,5 +1,5 @@
-import { IConversationDocument } from "@Akihira77/jobber-shared";
-import { Model, Schema, model } from "mongoose";
+import { IConversationDocument } from "@Akihira77/jobber-shared"
+import { Model, Schema, model } from "mongoose"
 
 const conversationSchema: Schema = new Schema({
     conversationId: {
@@ -18,11 +18,11 @@ const conversationSchema: Schema = new Schema({
         required: true,
         index: true
     }
-});
+})
 
 export const ConversationModel: Model<IConversationDocument> =
     model<IConversationDocument>(
         "Conversation",
         conversationSchema,
         "Conversation"
-    );
+    )

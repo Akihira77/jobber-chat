@@ -1,4 +1,4 @@
-import Joi, { ObjectSchema } from "joi";
+import Joi, { ObjectSchema } from "joi"
 
 const messageSchema: ObjectSchema = Joi.object().keys({
     conversationId: Joi.string().optional().allow(null, ""),
@@ -58,6 +58,6 @@ const messageSchema: ObjectSchema = Joi.object().keys({
         cancelled: Joi.boolean().optional()
     }).optional(),
     createdAt: Joi.string().optional()
-});
+})
 
-export { messageSchema };
+export { messageSchema }

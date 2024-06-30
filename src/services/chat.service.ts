@@ -1,16 +1,16 @@
-import { exchangeNamesAndRoutingKeys } from "@chat/config";
+import { exchangeNamesAndRoutingKeys } from "@chat/config"
 import {
     BadRequestError,
     IConversationDocument,
     IMessageDetails,
     IMessageDocument,
     lowerCase
-} from "@Akihira77/jobber-shared";
-import { ConversationModel } from "@chat/models/conversation.model";
-import { MessageModel } from "@chat/models/message.model";
-import { socketIOChatObject } from "@chat/server";
-import { Logger } from "winston";
-import { ChatQueue } from "@chat/queues/chat.queue";
+} from "@Akihira77/jobber-shared"
+import { ConversationModel } from "@chat/models/conversation.model"
+import { MessageModel } from "@chat/models/message.model"
+import { socketIOChatObject } from "@chat/server"
+import { Logger } from "winston"
+import { ChatQueue } from "@chat/queues/chat.queue"
 
 export class ChatService {
     constructor(
@@ -28,12 +28,12 @@ export class ChatService {
                 conversationId,
                 senderUsername,
                 receiverUsername
-            });
+            })
         } catch (error) {
             this.logger(
                 "services/chat.service.ts - createConversation()"
-            ).error("MessageService createConversation() method error", error);
-            throw error;
+            ).error("MessageService createConversation() method error", error)
+            throw error
         }
     }
 
@@ -43,11 +43,11 @@ export class ChatService {
     ): Promise<IMessageDocument> {
         try {
             const messageData: IMessageDocument =
-                await MessageModel.create(request);
+                await MessageModel.create(request)
 
             if (request.hasOffer) {
                 const emailMessageDetails: IMessageDetails & {
-                    receiverEmail: string;
+                    receiverEmail: string
                 } = {
                     receiverEmail,
                     sender: request.senderUsername,
@@ -58,26 +58,26 @@ export class ChatService {
                     description: request.offer?.description,
                     deliveryDays: `${request.offer?.deliveryInDays}`,
                     template: "offer"
-                };
+                }
 
-                const { notificationService } = exchangeNamesAndRoutingKeys;
+                const { notificationService } = exchangeNamesAndRoutingKeys
 
                 this.queue.publishDirectMessage(
                     notificationService.order.exchangeName,
                     notificationService.order.routingKey,
                     JSON.stringify(emailMessageDetails),
                     "Order email sent to notification service"
-                );
+                )
             }
 
-            socketIOChatObject.emit("message_received", messageData);
-            return messageData;
+            socketIOChatObject?.emit("message_received", messageData)
+            return messageData
         } catch (error) {
             this.logger("services/chat.service.ts - addMessage()").error(
                 "MessageService addMessage() method error",
                 error
-            );
-            throw error;
+            )
+            throw error
         }
     }
 
@@ -94,19 +94,19 @@ export class ChatService {
                         receiverUsername: senderUsername
                     }
                 ]
-            };
+            }
 
             const conversations = (await ConversationModel.find(queryObject)
                 .lean()
-                .exec()) as IConversationDocument[];
+                .exec()) as IConversationDocument[]
 
-            return conversations;
+            return conversations
         } catch (error) {
             this.logger("services/chat.service.ts - getConversation()").error(
                 "MessageService getConversation() method error",
                 error
-            );
-            throw error;
+            )
+            throw error
         }
     }
 
@@ -121,7 +121,7 @@ export class ChatService {
                     },
                     { receiverUsername: username }
                 ]
-            };
+            }
 
             const messages: IMessageDocument[] = await MessageModel.aggregate([
                 {
@@ -156,17 +156,17 @@ export class ChatService {
                         createdAt: "$result.createdAt"
                     }
                 }
-            ]);
+            ])
 
-            return messages;
+            return messages
         } catch (error) {
             this.logger(
                 "services/chat.service.ts - getUserConversationList()"
             ).error(
                 "MessageService getUserConversationList() method error",
                 error
-            );
-            throw error;
+            )
+            throw error
         }
     }
 
@@ -183,7 +183,7 @@ export class ChatService {
                         receiverUsername: senderUsername
                     }
                 ]
-            };
+            }
 
             const messages: IMessageDocument[] = await MessageModel.find(
                 queryObject,
@@ -191,15 +191,15 @@ export class ChatService {
                 { sort: { createdAt: 1 } }
             )
                 .lean()
-                .exec();
+                .exec()
 
-            return messages;
+            return messages
         } catch (error) {
             this.logger("services/chat.service.ts - getMessages()").error(
                 "MessageService getMessages() method error",
                 error
-            );
-            throw error;
+            )
+            throw error
         }
     }
 
@@ -211,15 +211,15 @@ export class ChatService {
                 { sort: { createdAt: 1 } }
             )
                 .lean()
-                .exec();
+                .exec()
 
-            return messages;
+            return messages
         } catch (error) {
             this.logger("services/chat.service.ts - getUserMessages()").error(
                 "MessageService getUserMessages() method error",
                 error
-            );
-            throw error;
+            )
+            throw error
         }
     }
 
@@ -232,7 +232,7 @@ export class ChatService {
                 throw new BadRequestError(
                     "offer type is incorrect",
                     "MessageService updateOffer() method error"
-                );
+                )
             }
 
             const result = await MessageModel.findByIdAndUpdate(
@@ -247,21 +247,23 @@ export class ChatService {
                 }
             )
                 .lean()
-                .exec();
+                .exec()
 
-            return result;
+            return result
         } catch (error) {
             this.logger("services/chat.service.ts - updateOffer()").error(
                 "MessageService updateOffer() method error",
                 error
-            );
-            throw error;
+            )
+            throw error
         }
     }
 
-    async markMessageAsRead(messageId: string): Promise<IMessageDocument> {
+    async markMessageAsRead(
+        messageId: string
+    ): Promise<IMessageDocument | null> {
         try {
-            const message = (await MessageModel.findByIdAndUpdate(
+            const message = await MessageModel.findByIdAndUpdate(
                 { _id: messageId },
                 {
                     $set: {
@@ -273,17 +275,17 @@ export class ChatService {
                 }
             )
                 .lean()
-                .exec()) as IMessageDocument;
+                .exec()
 
-            socketIOChatObject.emit("message_updated", message);
+            socketIOChatObject?.emit("message_updated", message)
 
-            return message;
+            return message
         } catch (error) {
             this.logger("services/chat.service.ts - markMessageAsRead()").error(
                 "MessageService markMessageAsRead() method error",
                 error
-            );
-            throw error;
+            )
+            throw error
         }
     }
 
@@ -291,7 +293,7 @@ export class ChatService {
         receiverUsername: string,
         senderUsername: string,
         messageId: string
-    ): Promise<IMessageDocument> {
+    ): Promise<IMessageDocument | null> {
         try {
             await MessageModel.updateMany(
                 { senderUsername, receiverUsername, isRead: false },
@@ -300,25 +302,25 @@ export class ChatService {
                         isRead: true
                     }
                 }
-            ).exec();
+            ).exec()
 
-            const message = (await MessageModel.findOne({
+            const message = await MessageModel.findOne({
                 _id: messageId
             })
                 .lean()
-                .exec()) as IMessageDocument;
+                .exec()
 
-            socketIOChatObject.emit("message_updated", message);
+            socketIOChatObject?.emit("message_updated", message)
 
-            return message;
+            return message
         } catch (error) {
             this.logger(
                 "services/chat.service.ts - markMultipleMessageAsRead()"
             ).error(
                 "MessageService markMultipleMessagesAsRead() method error",
                 error
-            );
-            throw error;
+            )
+            throw error
         }
     }
 }
