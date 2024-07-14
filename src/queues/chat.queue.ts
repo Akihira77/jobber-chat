@@ -3,23 +3,20 @@ import client, { Connection, Channel } from "amqplib"
 import { Logger } from "winston"
 
 export class ChatQueue {
-    constructor(
-        private ch: Channel | null,
-        private logger: (moduleName: string) => Logger
-    ) {}
+    constructor(private logger: (moduleName: string) => Logger) {}
 
-    async createConnection(): Promise<Channel> {
+    async createConnection(): Promise<Connection> {
         try {
             const connection: Connection = await client.connect(
                 `${RABBITMQ_ENDPOINT}`
             )
-            this.ch = await connection.createChannel()
+            const ch = await connection.createChannel()
             this.logger("queues/connection.ts - createConnection()").info(
                 "ChatService connected to RabbitMQ successfully..."
             )
-            this.closeConnection(this.ch, connection)
+            this.closeConnection(ch, connection)
 
-            return this.ch
+            return connection
         } catch (error) {
             this.logger("queues/connection.ts - createConnection()").error(
                 "ChatService createConnection() method error:",
@@ -30,23 +27,17 @@ export class ChatQueue {
     }
 
     async publishDirectMessage(
+        ch: Channel,
         exchangeName: string,
         routingKey: string,
         message: string,
         logMessage: string
     ): Promise<void> {
         try {
-            if (!this.ch) {
-                this.ch = await this.createConnection()
-            }
+            await ch.assertExchange(exchangeName, "direct")
 
-            await this.ch.assertExchange(exchangeName, "direct")
-
-            this.ch.publish(exchangeName, routingKey, Buffer.from(message))
-
-            this.logger(
-                "queues/chat.producer.ts - publishDirectMessage()"
-            ).info(logMessage)
+            ch.publish(exchangeName, routingKey, Buffer.from(message))
+            console.info(logMessage)
         } catch (error) {
             this.logger(
                 "queues/chat.producer.ts - publishDirectMessage()"

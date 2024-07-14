@@ -1,6 +1,9 @@
 import { Hono } from "hono"
 import { setupHono } from "../../server"
 import { databaseConnection } from "../../database"
+import { RedisClient } from "../../redis"
+import { winstonLogger } from "@Akihira77/jobber-shared"
+import { ELASTIC_SEARCH_URL } from "../../config"
 
 let app: Hono
 let db: any
@@ -8,7 +11,14 @@ let token: string = ""
 describe("Chat Service Integration Testing", () => {
     beforeAll(async () => {
         app = new Hono()
-        app = await setupHono(app)
+        const logger = (location?: string) =>
+            winstonLogger(
+                `${ELASTIC_SEARCH_URL}`,
+                location ?? "handler/test/hono-handler.test.ts",
+                "debug"
+            )
+        const redis = new RedisClient(logger)
+        app = await setupHono(app, redis)
         db = await databaseConnection()
         token =
             "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTE2LCJlbWFpbCI6ImthdGx5bi5zbWl0aEBnbWFpbC5jb20iLCJ1c2VybmFtZSI6IlByb3BlcmFlcm9wbCIsImlhdCI6MTcxODg0MzQ2MSwiZXhwIjoxNzE4OTI5ODYxLCJpc3MiOiJKb2JiZXIgQXV0aCJ9.qlZIT9RriUawM1MEls3s1MBJjpkhuDlI9z_Pu3saY1XvWYPGa3WcTOwPnnG7rdHy9qnMaqjLiCEcf5Rspp8esw"

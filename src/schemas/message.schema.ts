@@ -1,4 +1,30 @@
+import { IOffer } from "@Akihira77/jobber-shared"
 import Joi, { ObjectSchema } from "joi"
+
+type Offer = IOffer
+
+type MessageSchema = {
+    conversationId?: string
+    _id?: string
+    body: string
+    hasConversationId: boolean
+    file?: string
+    fileType?: string
+    fileName?: string
+    fileSize?: string
+    gigId: string
+    sellerId: string
+    buyerId: string
+    senderUsername: string
+    senderPicture: string
+    receiverUsername: string
+    receiverEmail: string
+    receiverPicture: string
+    isRead: boolean
+    hasOffer: boolean
+    offer?: Offer
+    createdAt?: string
+}
 
 const messageSchema: ObjectSchema = Joi.object().keys({
     conversationId: Joi.string().optional().allow(null, ""),
@@ -60,4 +86,4 @@ const messageSchema: ObjectSchema = Joi.object().keys({
     createdAt: Joi.string().optional()
 })
 
-export { messageSchema }
+export { messageSchema, MessageSchema }

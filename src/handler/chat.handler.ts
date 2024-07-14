@@ -6,72 +6,91 @@ import {
     IMessageDocument,
     IConversationDocument
 } from "@Akihira77/jobber-shared"
-import { messageSchema } from "@chat/schemas/message.schema"
+import { MessageSchema } from "@chat/schemas/message.schema"
 import { ChatService } from "@chat/services/chat.service"
+import typia from "typia"
+import { RedisClient } from "../redis"
 
 export class ChatHandler {
-    constructor(private chatService: ChatService) {}
+    constructor(
+        private chatService: ChatService,
+        private readonly redis: RedisClient
+    ) {}
 
     async addMessage(reqBody: any): Promise<IMessageDocument> {
-        const { error, value } = messageSchema.validate(reqBody)
+        try {
+            const res = typia.validateEquals<MessageSchema>(reqBody)
 
-        if (error?.details) {
-            throw new BadRequestError(
-                error.details[0].message,
-                "Create message() method"
-            )
-        }
-
-        let file: string = value.file
-        const randomBytes: Buffer = crypto.randomBytes(20)
-        const randomCharacters: string = randomBytes.toString("hex")
-
-        if (file) {
-            const result =
-                value.fileType === "zip"
-                    ? await uploads(file, `${randomCharacters}.zip`)
-                    : await uploads(file)
-
-            if (!result?.public_id) {
+            if (!res.success) {
                 throw new BadRequestError(
-                    "File upload error. Try again",
+                    res.errors[0].expected,
                     "Create message() method"
                 )
             }
 
-            file = result?.secure_url
-        }
+            if (res.data.file) {
+                const randomBytes: Buffer = await Promise.resolve(
+                    crypto.randomBytes(20)
+                )
+                const randomCharacters: string = randomBytes.toString("hex")
+                const result =
+                    res.data.fileType === "zip"
+                        ? await uploads(
+                              res.data.file,
+                              `${randomCharacters}.zip`
+                          )
+                        : await uploads(res.data.file)
 
-        const messageData: IMessageDocument = {
-            conversationId: value.conversationId,
-            body: value.body,
-            file,
-            fileType: value.fileType,
-            fileSize: value.fileSize,
-            fileName: value.fileName,
-            gigId: value.gigId,
-            buyerId: value.buyerId,
-            sellerId: value.sellerId,
-            senderUsername: value.senderUsername,
-            senderPicture: value.senderPicture,
-            receiverUsername: value.receiverUsername,
-            receiverPicture: value.receiverPicture,
-            isRead: value.isRead,
-            hasOffer: value.hasOffer,
-            offer: value.offer
-        }
+                if (!result?.public_id) {
+                    throw new BadRequestError(
+                        "File upload error. Try again",
+                        "Create message() method"
+                    )
+                }
 
-        if (!value.hasConversationId) {
-            await this.chatService.createConversation(
-                String(value.conversationId),
-                messageData.senderUsername!,
-                messageData.receiverUsername!
+                res.data.file = result?.secure_url
+            }
+
+            const cachedConversationId = await this.redis.getDataFromCache(
+                res.data.conversationId ?? ""
             )
+
+            if (!cachedConversationId) {
+                const conversationsFromDb =
+                    await this.chatService.getConversation(
+                        res.data.senderUsername,
+                        res.data.receiverUsername
+                    )
+                if (conversationsFromDb.length > 0) {
+                    res.data.conversationId =
+                        conversationsFromDb[0].conversationId
+                } else {
+                    res.data.conversationId =
+                        await this.chatService.createConversation(
+                            String(res.data.conversationId),
+                            res.data.senderUsername!,
+                            res.data.receiverUsername!
+                        )
+                }
+
+                await this.redis.setDataToCache(
+                    res.data.conversationId,
+                    res.data.conversationId,
+                    false,
+                    Infinity
+                )
+            }
+
+            const messageData = await this.chatService.addMessage(
+                reqBody.receiverEmail,
+                res.data
+            )
+
+            return messageData
+        } catch (error) {
+            console.log(error)
+            throw error
         }
-
-        await this.chatService.addMessage(reqBody.receiverEmail, messageData)
-
-        return messageData
     }
 
     async findConversation(

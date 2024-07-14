@@ -1,6 +1,5 @@
 import http from "http"
-
-import jwt from "jsonwebtoken"
+import { createVerifier } from "fast-jwt"
 import {
     CustomError,
     IAuthPayload,
@@ -10,12 +9,9 @@ import {
     API_GATEWAY_URL,
     ELASTIC_SEARCH_URL,
     JWT_TOKEN,
+    NODE_ENV,
     PORT
 } from "@chat/config"
-import { ElasicSearchClient } from "@chat/elasticsearch"
-import { appRoutes } from "@chat/routes"
-import { Server, Socket } from "socket.io"
-import { Logger } from "winston"
 import { Context, Hono, Next } from "hono"
 import { cors } from "hono/cors"
 import { compress } from "hono/compress"
@@ -25,39 +21,55 @@ import { secureHeaders } from "hono/secure-headers"
 import { bodyLimit } from "hono/body-limit"
 import { rateLimiter } from "hono-rate-limiter"
 import { HTTPException } from "hono/http-exception"
+import { appRoutes } from "@chat/routes"
+import { Logger } from "winston"
 import { StatusCodes } from "http-status-codes"
 import { StatusCode } from "hono/utils/http-status"
-import { ServerType } from "@hono/node-server/dist/types"
 import { serve } from "@hono/node-server"
 import { logger } from "hono/logger"
 import { ChatQueue } from "./queues/chat.queue"
+import { ElasticSearchClient } from "./elasticsearch"
+import { DisconnectReason, Server, Socket } from "socket.io"
+import { App } from "uWebSockets.js"
+import { ServerType } from "@hono/node-server/dist/types"
+import { Channel } from "amqplib"
+import { RedisClient } from "./redis"
 
-export let socketIOChatObject: Server | null
-const LIMIT_TIMEOUT = 2 * 1000 // 2s
+const LIMIT_TIMEOUT = 3 * 1000 // 3s
+export let socketIOChatObject: Server
+export let pubMQChatObject: ChatQueue
+export let consumeMQChatObject: ChatQueue
 
-export async function setupHono(app: Hono): Promise<Hono> {
-    const logger = (moduleName: string) =>
-        winstonLogger(
-            `${ELASTIC_SEARCH_URL}`,
-            moduleName ?? "server.ts",
-            "debug"
-        )
+export async function setupHono(
+    app: Hono,
+    redis: RedisClient,
+    logger?: (location?: string) => Logger
+): Promise<Hono> {
+    if (!logger) {
+        logger = (location?: string) =>
+            winstonLogger(
+                `${ELASTIC_SEARCH_URL}`,
+                location ?? "server.ts",
+                "debug"
+            )
+    }
 
-    const queue = await startQueues(logger)
+    const { queue, ch } = await startQueues(logger)
     await startElasticSearch(logger)
     chatErrorHandler(app)
     securityMiddleware(app)
     standardMiddleware(app)
-    routesMiddleware(app, queue, logger)
+    routesMiddleware(app, queue, ch, redis, logger)
 
     return app
 }
 
 export async function start(
     app: Hono,
-    logger: (moduleName: string) => Logger
+    redis: RedisClient,
+    logger: (moduleName?: string) => Logger
 ): Promise<void> {
-    app = await setupHono(app)
+    app = await setupHono(app, redis, logger)
     startServer(app, logger)
 }
 
@@ -70,7 +82,9 @@ function securityMiddleware(app: Hono): void {
         })
     )
     app.use(
-        secureHeaders({ crossOriginEmbedderPolicy: true, xXssProtection: true })
+        secureHeaders({
+            xXssProtection: "1"
+        })
     )
     app.use(csrf({ origin: [`${API_GATEWAY_URL}`] }))
     app.use(
@@ -84,8 +98,13 @@ function securityMiddleware(app: Hono): void {
     app.use(async (c: Context, next: Next) => {
         const authorization = c.req.header("authorization")
         if (authorization && authorization !== "") {
-            const token = authorization.split(" ")[1]
-            const payload = jwt.verify(token, JWT_TOKEN!) as IAuthPayload
+            const authBearer = authorization.split(" ")[1]
+            const verifier = createVerifier({
+                key: `${JWT_TOKEN}`,
+                cache: true,
+                cacheTTL: 30 * 60 * 1000
+            })
+            const payload = verifier(authBearer) as IAuthPayload
             c.set("currentUser", payload)
         }
 
@@ -94,7 +113,9 @@ function securityMiddleware(app: Hono): void {
 }
 
 function standardMiddleware(app: Hono): void {
-    app.use(logger())
+    if (NODE_ENV !== "production") {
+        app.use(logger())
+    }
     app.use(compress())
     app.use(
         bodyLimit({
@@ -128,33 +149,43 @@ function standardMiddleware(app: Hono): void {
 function routesMiddleware(
     app: Hono,
     queue: ChatQueue,
+    ch: Channel,
+    redis: RedisClient,
     logger: (moduleName: string) => Logger
 ): void {
-    appRoutes(app, queue, logger)
+    appRoutes(app, queue, ch, redis, logger)
 }
 
 async function startQueues(
     logger: (moduleName: string) => Logger
-): Promise<ChatQueue> {
-    const queue = new ChatQueue(null, logger)
-    await queue.createConnection()
-    return queue
+): Promise<{ queue: ChatQueue; ch: Channel }> {
+    const queue = new ChatQueue(logger)
+    const pub = await queue.createConnection()
+    const pubCh = await pub.createChannel()
+
+    pubMQChatObject = queue
+    consumeMQChatObject = queue
+
+    return { queue, ch: pubCh }
 }
 
-async function startElasticSearch(
+export async function startElasticSearch(
     logger: (moduleName: string) => Logger
-): Promise<void> {
-    const elastic = new ElasicSearchClient(logger)
+): Promise<ElasticSearchClient> {
+    const elastic = new ElasticSearchClient(logger)
     await elastic.checkConnection()
+
+    return elastic
 }
 
 function chatErrorHandler(app: Hono): void {
     app.notFound((c) => {
-        return c.text("Route path is not found", StatusCodes.NOT_FOUND)
+        return c.text("Route path does not found", StatusCodes.NOT_FOUND)
     })
 
     app.onError((err: Error, c: Context) => {
         if (err instanceof CustomError) {
+            console.log(err)
             return c.json(
                 err.serializeErrors(),
                 (err.statusCode as StatusCode) ??
@@ -176,41 +207,19 @@ async function startServer(
     logger: (moduleName: string) => Logger
 ): Promise<void> {
     try {
-        const server = startHttpServer(app, logger)
-        socketIOChatObject = await createSocketIO(server as http.Server, logger)
+        startHttpServer(app, logger)
+        socketIOChatObject = await createSocketIO(logger)
 
         socketIOChatObject.on("connection", (socket: Socket) => {
             logger("server.ts - startServer()").info(
                 `Socket receive a connection with id: ${socket.id}`
             )
 
-            socket.on("disconnect", () => {
+            socket.on("disconnect", (reason: DisconnectReason) => {
                 logger("server.ts - startServer()").info(
-                    `Connection with id: ${socket.id} disconnected`
+                    `Socket with id: ${socket.id} disconnected with reason: ${reason.toString()}`
                 )
-
-                destroy()
             })
-
-            let alive = Date.now()
-            socket.on("am_alive", () => {
-                alive = Date.now()
-            })
-
-            const intv = setInterval(() => {
-                if (Date.now() > alive + 20000) {
-                    //sever checks if clients has no activity in last 20s
-                    destroy()
-                    clearInterval(intv)
-                }
-            }, 10000)
-
-            function destroy() {
-                try {
-                    socket.disconnect()
-                    socket.removeAllListeners()
-                } catch {}
-            }
         })
     } catch (error) {
         logger("server.ts - startServer()").error(
@@ -219,21 +228,38 @@ async function startServer(
         )
     }
 }
-
 async function createSocketIO(
-    httpServer: http.Server,
     logger: (moduleName: string) => Logger
 ): Promise<Server> {
-    const io: Server = new Server(httpServer, {
+    const uwsApp = App()
+    const io: Server = new Server({
         cors: {
             origin: ["*"],
             methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             credentials: true
-        }
+        },
+        transports: ["websocket"]
     })
 
+    io.attachApp(uwsApp)
+    // console.log("OrderService Socket connected");
     logger("server.ts - createSocketIO()").info("ChatService Socket connected")
 
+    io.engine.on("connection", (rawSocket) => {
+        rawSocket.request = null
+    })
+
+    uwsApp.listen(Number(PORT) - 1000, (token) => {
+        if (!token) {
+            logger("server.ts - createSocketIO()").warn(
+                "Port is already in use"
+            )
+        } else {
+            logger("server.ts - createSocketIO()").info(
+                `SocketIO x uWebSockets.js is running on port ${Number(PORT) - 1000}`
+            )
+        }
+    })
     return io
 }
 

@@ -11,6 +11,7 @@ declare global {
             NODE_ENV: string
             API_GATEWAY_URL: string
             RABBITMQ_ENDPOINT: string
+            REDIS_HOST: string
             CLOUD_NAME: string
             CLOUD_API_KEY: string
             CLOUD_API_SECRET: string

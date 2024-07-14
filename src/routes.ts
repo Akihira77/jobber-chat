@@ -1,5 +1,5 @@
 import { Logger } from "winston"
-import jwt from "jsonwebtoken"
+import { createVerifier } from "fast-jwt"
 import { Context, Hono, Next } from "hono"
 import { StatusCodes } from "http-status-codes"
 import { NotAuthorizedError } from "@Akihira77/jobber-shared"
@@ -8,6 +8,8 @@ import { ChatQueue } from "./queues/chat.queue"
 import { ChatService } from "./services/chat.service"
 import { ChatHandler } from "./handler/chat.handler"
 import { GATEWAY_JWT_TOKEN } from "./config"
+import { Channel } from "amqplib"
+import { RedisClient } from "./redis"
 
 // const BASE_PATH = "/api/v1/message"
 const BASE_PATH = "/message"
@@ -15,21 +17,23 @@ const BASE_PATH = "/message"
 export function appRoutes(
     app: Hono,
     queue: ChatQueue,
+    ch: Channel,
+    redis: RedisClient,
     logger: (moduleName: string) => Logger
 ): void {
     app.get("chat-health", (c: Context) => {
         return c.text("Chat service is healthy and OK.", StatusCodes.OK)
     })
 
-    const chatSvc = new ChatService(logger, queue)
-    const chatController = new ChatHandler(chatSvc)
+    const chatSvc = new ChatService(queue, ch, logger)
+    const chatController = new ChatHandler(chatSvc, redis)
 
     const api = app.basePath(BASE_PATH)
-    // api.use(verifyGatewayRequest, authOnly);
+    api.use(verifyGatewayRequest, authOnly)
 
-    api.use(authOnly)
+    // api.use(authOnly)
     chatRoute(api, chatController)
-    api.use(verifyGatewayRequest)
+    // api.use(verifyGatewayRequest)
 }
 
 function chatRoute(
@@ -43,7 +47,7 @@ function chatRoute(
         return c.json(
             {
                 message: "Message added",
-                conversationId: jsonBody.conversationId,
+                conversationId: messageData.conversationId,
                 messageData
             },
             StatusCodes.CREATED
@@ -192,13 +196,13 @@ async function verifyGatewayRequest(c: Context, next: Next): Promise<void> {
     }
 
     try {
-        const payload: { id: string; iat: number } = jwt.verify(
-            token,
-            GATEWAY_JWT_TOKEN!
-        ) as {
-            id: string
-            iat: number
-        }
+        const verifier = createVerifier({
+            key: `${GATEWAY_JWT_TOKEN}`,
+            cache: true,
+            cacheTTL: 24 * 60 * 60 * 1000, // 24 hours,
+            maxAge: 24 * 60 * 60 * 1000
+        })
+        const payload: { id: string; iat: number } = verifier(token)
 
         c.set("gatewayToken", payload)
         await next()

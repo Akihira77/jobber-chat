@@ -18,8 +18,10 @@ describe("updateOffer() method", () => {
     let chatService: ChatService
     beforeAll(async () => {
         db = await databaseConnection()
-        const queue = new ChatQueue(null, logger)
-        chatService = new ChatService(logger, queue)
+        const queue = new ChatQueue(logger)
+        const pub = await queue.createConnection()
+        const ch = await pub.createChannel()
+        chatService = new ChatService(queue, ch, logger)
     })
 
     afterAll(async () => {

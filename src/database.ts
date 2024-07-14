@@ -2,12 +2,12 @@ import { DATABASE_URL } from "@chat/config"
 import mongoose, { Mongoose } from "mongoose"
 
 export const databaseConnection = async (): Promise<Mongoose> => {
-    try {
-        // console.log(DATABASE_URL);
-        const db = await mongoose.connect(`${DATABASE_URL}`)
-        return db
-    } catch (error) {
-        console.log(error)
-        throw error
-    }
+    const db = await mongoose.connect(`${DATABASE_URL}`, {
+        maxConnecting: 20,
+        maxIdleTimeMS: 30 * 60 * 1000,
+        maxPoolSize: 20,
+        minPoolSize: 0
+    })
+
+    return db
 }

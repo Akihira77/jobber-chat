@@ -2,33 +2,37 @@ import { exchangeNamesAndRoutingKeys } from "@chat/config"
 import {
     BadRequestError,
     IConversationDocument,
-    IMessageDetails,
     IMessageDocument,
     lowerCase
 } from "@Akihira77/jobber-shared"
 import { ConversationModel } from "@chat/models/conversation.model"
 import { MessageModel } from "@chat/models/message.model"
-import { socketIOChatObject } from "@chat/server"
+import { socketIOChatObject } from "../server"
 import { Logger } from "winston"
 import { ChatQueue } from "@chat/queues/chat.queue"
+import { Channel } from "amqplib"
+import typia from "typia"
 
 export class ChatService {
     constructor(
-        private logger: (moduleName: string) => Logger,
-        private queue: ChatQueue
+        private queue: ChatQueue,
+        public pubCh: Channel,
+        private logger: (moduleName: string) => Logger
     ) {}
 
     async createConversation(
         conversationId: string,
         senderUsername: string,
         receiverUsername: string
-    ): Promise<void> {
+    ): Promise<string> {
         try {
-            await ConversationModel.create({
+            const conversation = await ConversationModel.create({
                 conversationId,
                 senderUsername,
                 receiverUsername
             })
+
+            return conversation.id
         } catch (error) {
             this.logger(
                 "services/chat.service.ts - createConversation()"
@@ -46,26 +50,23 @@ export class ChatService {
                 await MessageModel.create(request)
 
             if (request.hasOffer) {
-                const emailMessageDetails: IMessageDetails & {
-                    receiverEmail: string
-                } = {
-                    receiverEmail,
-                    sender: request.senderUsername,
-                    amount: `${request.offer?.price}`,
-                    buyerUsername: lowerCase(`${request.receiverUsername}`),
-                    sellerUsername: lowerCase(`${request.senderUsername}`),
-                    title: request.offer?.gigTitle,
-                    description: request.offer?.description,
-                    deliveryDays: `${request.offer?.deliveryInDays}`,
-                    template: "offer"
-                }
-
                 const { notificationService } = exchangeNamesAndRoutingKeys
 
                 this.queue.publishDirectMessage(
+                    this.pubCh,
                     notificationService.order.exchangeName,
                     notificationService.order.routingKey,
-                    JSON.stringify(emailMessageDetails),
+                    typia.json.stringify({
+                        receiverEmail,
+                        sender: request.senderUsername,
+                        amount: `${request.offer?.price}`,
+                        buyerUsername: lowerCase(`${request.receiverUsername}`),
+                        sellerUsername: lowerCase(`${request.senderUsername}`),
+                        title: request.offer?.gigTitle,
+                        description: request.offer?.description,
+                        deliveryDays: `${request.offer?.deliveryInDays}`,
+                        template: "offer"
+                    }),
                     "Order email sent to notification service"
                 )
             }
