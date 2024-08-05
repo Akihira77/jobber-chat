@@ -9,13 +9,9 @@ import {
 import { MessageSchema } from "@chat/schemas/message.schema"
 import { ChatService } from "@chat/services/chat.service"
 import typia from "typia"
-import { RedisClient } from "../redis"
 
 export class ChatHandler {
-    constructor(
-        private chatService: ChatService,
-        private readonly redis: RedisClient
-    ) {}
+    constructor(private chatService: ChatService) {}
 
     async addMessage(reqBody: any): Promise<IMessageDocument> {
         try {
@@ -51,34 +47,20 @@ export class ChatHandler {
                 res.data.file = result?.secure_url
             }
 
-            const cachedConversationId = await this.redis.getDataFromCache(
-                res.data.conversationId ?? ""
-            )
-
-            if (!cachedConversationId) {
-                const conversationsFromDb =
-                    await this.chatService.getConversation(
-                        res.data.senderUsername,
-                        res.data.receiverUsername
-                    )
-                if (conversationsFromDb.length > 0) {
-                    res.data.conversationId =
-                        conversationsFromDb[0].conversationId
-                } else {
-                    res.data.conversationId =
-                        await this.chatService.createConversation(
-                            String(res.data.conversationId),
-                            res.data.senderUsername!,
-                            res.data.receiverUsername!
-                        )
-                }
-
-                await this.redis.setDataToCache(
-                    res.data.conversationId,
-                    res.data.conversationId,
-                    false,
-                    Infinity
+            const checkIfToUserHaveConversation =
+                await this.chatService.isTwoUserHaveConversation(
+                    res.data.senderUsername,
+                    res.data.receiverUsername
                 )
+            if (checkIfToUserHaveConversation) {
+                res.data.conversationId = checkIfToUserHaveConversation
+            } else {
+                res.data.conversationId =
+                    await this.chatService.createConversation(
+                        String(res.data.conversationId),
+                        res.data.senderUsername!,
+                        res.data.receiverUsername!
+                    )
             }
 
             const messageData = await this.chatService.addMessage(

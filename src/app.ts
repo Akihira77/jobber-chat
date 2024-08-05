@@ -53,7 +53,7 @@ const main = async (): Promise<void> => {
             `Redis Connected ${await redis.client.ping()}`
         )
         const app = new Hono()
-        start(app, redis, logger)
+        start(app, logger)
 
         process.once("exit", async () => {
             await db.connection.close()
@@ -66,7 +66,7 @@ const main = async (): Promise<void> => {
 
 if (NODE_ENV === "production") {
     let numCPUs = Math.floor(os.availableParallelism() / 2)
-    numCPUs = 3
+    numCPUs = 4
 
     if (cluster.isPrimary) {
         for (let i = 0; i < numCPUs; i++) {

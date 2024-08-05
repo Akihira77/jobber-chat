@@ -9,7 +9,6 @@ import { ChatService } from "./services/chat.service"
 import { ChatHandler } from "./handler/chat.handler"
 import { GATEWAY_JWT_TOKEN } from "./config"
 import { Channel } from "amqplib"
-import { RedisClient } from "./redis"
 
 // const BASE_PATH = "/api/v1/message"
 const BASE_PATH = "/message"
@@ -18,7 +17,6 @@ export function appRoutes(
     app: Hono,
     queue: ChatQueue,
     ch: Channel,
-    redis: RedisClient,
     logger: (moduleName: string) => Logger
 ): void {
     app.get("chat-health", (c: Context) => {
@@ -26,7 +24,7 @@ export function appRoutes(
     })
 
     const chatSvc = new ChatService(queue, ch, logger)
-    const chatController = new ChatHandler(chatSvc, redis)
+    const chatController = new ChatHandler(chatSvc)
 
     const api = app.basePath(BASE_PATH)
     api.use(verifyGatewayRequest, authOnly)

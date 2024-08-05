@@ -82,6 +82,34 @@ export class ChatService {
         }
     }
 
+    async isTwoUserHaveConversation(
+        senderUsername: string,
+        receiverUsername: string
+    ): Promise<string | null> {
+        try {
+            const queryObject = {
+                $or: [
+                    { senderUsername, receiverUsername },
+                    {
+                        senderUsername: receiverUsername,
+                        receiverUsername: senderUsername
+                    }
+                ]
+            }
+
+            const conversation = await ConversationModel.findOne(queryObject)
+                .lean()
+                .exec()
+
+            return conversation?.conversationId ?? null
+        } catch (error) {
+            this.logger("services/chat.service.ts - getConversation()").error(
+                "MessageService getConversation() method error",
+                error
+            )
+            throw error
+        }
+    }
     async getConversation(
         senderUsername: string,
         receiverUsername: string

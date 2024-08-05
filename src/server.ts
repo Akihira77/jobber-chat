@@ -19,7 +19,6 @@ import { timeout } from "hono/timeout"
 import { csrf } from "hono/csrf"
 import { secureHeaders } from "hono/secure-headers"
 import { bodyLimit } from "hono/body-limit"
-import { rateLimiter } from "hono-rate-limiter"
 import { HTTPException } from "hono/http-exception"
 import { appRoutes } from "@chat/routes"
 import { Logger } from "winston"
@@ -33,7 +32,6 @@ import { DisconnectReason, Server, Socket } from "socket.io"
 import { App } from "uWebSockets.js"
 import { ServerType } from "@hono/node-server/dist/types"
 import { Channel } from "amqplib"
-import { RedisClient } from "./redis"
 
 const LIMIT_TIMEOUT = 3 * 1000 // 3s
 export let socketIOChatObject: Server
@@ -42,7 +40,6 @@ export let consumeMQChatObject: ChatQueue
 
 export async function setupHono(
     app: Hono,
-    redis: RedisClient,
     logger?: (location?: string) => Logger
 ): Promise<Hono> {
     if (!logger) {
@@ -59,17 +56,16 @@ export async function setupHono(
     chatErrorHandler(app)
     securityMiddleware(app)
     standardMiddleware(app)
-    routesMiddleware(app, queue, ch, redis, logger)
+    routesMiddleware(app, queue, ch, logger)
 
     return app
 }
 
 export async function start(
     app: Hono,
-    redis: RedisClient,
     logger: (moduleName?: string) => Logger
 ): Promise<void> {
-    app = await setupHono(app, redis, logger)
+    app = await setupHono(app, logger)
     startServer(app, logger)
 }
 
@@ -129,31 +125,25 @@ function standardMiddleware(app: Hono): void {
         })
     )
 
-    const generateRandomNumber = (length: number): number => {
-        return (
-            Math.floor(Math.random() * (9 * Math.pow(10, length - 1))) +
-            Math.pow(10, length - 1)
-        )
-    }
-
-    app.use(
-        rateLimiter({
-            windowMs: 1 * 60 * 1000, //60s
-            limit: 10,
-            standardHeaders: "draft-6",
-            keyGenerator: () => generateRandomNumber(12).toString()
-        })
-    )
+    //    app.use(
+    //        rateLimiter({
+    //            windowMs: 10 * 60 * 1000, // 600s
+    //            limit: 100,
+    //            standardHeaders: "draft-6",
+    //            keyGenerator: (c: Context) => {
+    //                return c.req.url
+    //            }
+    //        })
+    //    )
 }
 
 function routesMiddleware(
     app: Hono,
     queue: ChatQueue,
     ch: Channel,
-    redis: RedisClient,
     logger: (moduleName: string) => Logger
 ): void {
-    appRoutes(app, queue, ch, redis, logger)
+    appRoutes(app, queue, ch, logger)
 }
 
 async function startQueues(
